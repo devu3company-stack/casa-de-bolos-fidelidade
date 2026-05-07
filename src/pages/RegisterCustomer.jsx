@@ -28,17 +28,30 @@ const RegisterCustomer = () => {
     setLoading(true);
     setError('');
 
+    // Limpeza de dados para o Supabase
+    const dataToInsert = {
+      ...formData,
+      birthday: formData.birthday || null,
+      phone: formData.phone.replace(/\D/g, ''),
+      cpf: formData.cpf.replace(/\D/g, '') // Garante que o CPF seja salvo apenas como números
+    };
+
     const { data, error: err } = await supabase
       .from('loyalty_profiles')
-      .insert([formData])
+      .insert([dataToInsert])
       .select()
       .single();
 
     if (!err) {
       setSuccess(true);
-      // Opcional: remover o timeout ou aumentar para dar tempo de enviar o zap
     } else {
-      setError(err.message.includes('unique') ? 'Este CPF já está cadastrado no sistema.' : 'Erro ao realizar cadastro. Verifique os dados.');
+      console.error('Erro detalhado do Supabase:', err);
+      const errorMsg = err.message || JSON.stringify(err);
+      if (errorMsg.includes('unique')) {
+        setError('Este CPF já está cadastrado no sistema.');
+      } else {
+        setError(`Erro técnico: ${errorMsg} (Código: ${err.code || 'N/A'})`);
+      }
     }
     setLoading(false);
   };

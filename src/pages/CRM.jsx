@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import logo from '../assets/logo.png';
-import { Search, Download, Filter, MessageSquare, Clock } from 'lucide-react';
+import { Search, Download, Filter, MessageSquare, Clock, Trash2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 const CRM = () => {
@@ -47,6 +47,24 @@ const CRM = () => {
     setLoading(false);
   };
 
+  const handleDelete = async (id, name) => {
+    if (window.confirm(`Tem certeza que deseja apagar o cliente ${name}? Todos os carimbos e histórico serão perdidos.`)) {
+      setLoading(true);
+      const { error } = await supabase
+        .from('loyalty_profiles')
+        .delete()
+        .eq('id', id);
+
+      if (!error) {
+        setCustomers(customers.filter(c => c.id !== id));
+        alert('Cliente removido com sucesso.');
+      } else {
+        alert('Erro ao apagar cliente: ' + error.message);
+      }
+      setLoading(false);
+    }
+  };
+
   const filterData = () => {
     let result = [...customers];
 
@@ -66,6 +84,20 @@ const CRM = () => {
       result = result.filter(c => c.daysInactive > 15 && c.daysInactive <= 30);
     } else if (segment === 'churn') {
       result = result.filter(c => c.daysInactive > 30);
+    } else if (segment === 'birthday_today') {
+      const today = new Date();
+      result = result.filter(c => {
+        if (!c.birthday) return false;
+        const bday = new Date(c.birthday + 'T00:00:00'); // Garante fuso horário local
+        return bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth();
+      });
+    } else if (segment === 'birthday_month') {
+      const today = new Date();
+      result = result.filter(c => {
+        if (!c.birthday) return false;
+        const bday = new Date(c.birthday + 'T00:00:00');
+        return bday.getMonth() === today.getMonth();
+      });
     }
 
     setFilteredCustomers(result);
@@ -160,6 +192,8 @@ const CRM = () => {
             <option value="active">Ativos (até 15 d)</option>
             <option value="warning">Atenção (15-30 d)</option>
             <option value="churn">Inativos (+30 d)</option>
+            <option value="birthday_today">Aniversariantes (Hoje)</option>
+            <option value="birthday_month">Aniversariantes (Mês)</option>
           </select>
         </div>
 
@@ -193,8 +227,9 @@ const CRM = () => {
                   <th style={{ padding: '1.2rem' }}>Cliente</th>
                   <th style={{ padding: '1.2rem' }}>Status</th>
                   <th style={{ padding: '1.2rem' }}>Última Compra</th>
+                  <th style={{ padding: '1.2rem' }}>Aniversário</th>
                   <th style={{ padding: '1.2rem' }}>Carimbos</th>
-                  <th style={{ padding: '1.2rem' }}>Ações</th>
+                  <th style={{ padding: '1.2rem', minWidth: '180px' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,6 +258,9 @@ const CRM = () => {
                     <td style={{ padding: '1.2rem', fontSize: '0.9rem' }}>
                       {new Date(customer.last_purchase).toLocaleDateString('pt-BR')}
                     </td>
+                    <td style={{ padding: '1.2rem', fontSize: '0.9rem' }}>
+                      {customer.birthday ? new Date(customer.birthday + 'T00:00:00').toLocaleDateString('pt-BR').substring(0, 5) : '-'}
+                    </td>
                     <td style={{ padding: '1.2rem' }}>
                       <div style={{ 
                         width: '30px', 
@@ -240,44 +278,72 @@ const CRM = () => {
                       </div>
                     </td>
                     <td style={{ padding: '1.2rem' }}>
-                      <button 
-                        onClick={() => {
-                          const phone = customer.phone?.replace(/\D/g, '');
-                          const cleanPhone = phone?.startsWith('55') ? phone : `55${phone}`;
-                          let message = '';
-                          
-                          if (customer.daysInactive <= 15) {
-                            message = `Olá, ${customer.full_name}! Notamos que você é um cliente frequente da Casa de Bolos. Você já tem ${customer.stamps} carimbos! Continue assim para ganhar seu bolo grátis em breve! 🍰✨`;
-                          } else if (customer.daysInactive <= 30) {
-                            message = `Oi, ${customer.full_name}! Estamos com saudades de você aqui na Casa de Bolos! 🏠🧁 Você tem ${customer.stamps} carimbos acumulados. Que tal passar aqui hoje e garantir mais um?`;
-                          } else {
-                            message = `Olá, ${customer.full_name}! Faz um tempo que não vemos você na Casa de Bolos. 😢 Temos uma seleção especial de bolos fresquinhos esperando por você! Você já possui ${customer.stamps} carimbos no nosso programa de fidelidade. Vem conferir as novidades! 🎂❤️`;
-                          }
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
+                        <button 
+                          onClick={() => {
+                            const phone = customer.phone?.replace(/\D/g, '');
+                            const cleanPhone = phone?.startsWith('55') ? phone : `55${phone}`;
+                            let message = '';
+                            
+                            const today = new Date();
+                            const bday = customer.birthday ? new Date(customer.birthday + 'T00:00:00') : null;
+                            const isBirthday = bday && bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth();
 
-                          window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.5rem',
-                          padding: '0.5rem 1rem',
-                          borderRadius: '999px',
-                          background: '#25D366',
-                          color: 'white',
-                          textDecoration: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          fontWeight: 'bold',
-                          transition: 'transform 0.2s'
-                        }}
-                        onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                        onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                      >
-                        <MessageSquare size={16} />
-                        WHATSAPP
-                      </button>
+                            if (isBirthday) {
+                              message = `Parabéns, ${customer.full_name}! 🎉 A Casa de Bolos deseja um feliz aniversário! Venha comemorar conosco e garantir seu carimbo de hoje! 🎂✨`;
+                            } else if (customer.daysInactive <= 15) {
+                              message = `Olá, ${customer.full_name}! Notamos que você é um cliente frequente da Casa de Bolos. Você já tem ${customer.stamps} carimbos! Continue assim para ganhar seu bolo grátis em breve! 🍰✨`;
+                            } else if (customer.daysInactive <= 30) {
+                              message = `Oi, ${customer.full_name}! Estamos com saudades de você aqui na Casa de Bolos! 🏠🧁 Você tem ${customer.stamps} carimbos acumulados. Que tal passar aqui hoje e garantir mais um?`;
+                            } else {
+                              message = `Olá, ${customer.full_name}! Faz um tempo que não vemos você na Casa de Bolos. 😢 Temos uma seleção especial de bolos fresquinhos esperando por você! Você já possui ${customer.stamps} carimbos no nosso programa de fidelidade. Vem conferir as novidades! 🎂❤️`;
+                            }
+
+                            window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem',
+                            padding: '0.5rem 0.8rem',
+                            borderRadius: '8px',
+                            background: '#25D366',
+                            color: 'white',
+                            textDecoration: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            fontWeight: 'bold',
+                            width: '100%'
+                          }}
+                        >
+                          <MessageSquare size={14} />
+                          WHATSAPP
+                        </button>
+                        
+                        <button 
+                          onClick={() => handleDelete(customer.id, customer.full_name)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem',
+                            padding: '0.5rem 0.8rem',
+                            borderRadius: '8px',
+                            background: '#fee2e2',
+                            color: '#b85252',
+                            border: '1px solid #fecaca',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            fontWeight: 'bold',
+                            width: '100%'
+                          }}
+                        >
+                          <Trash2 size={14} />
+                          EXCLUIR CLIENTE
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

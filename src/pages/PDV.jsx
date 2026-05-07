@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { Search, UserPlus } from 'lucide-react';
+import { Search, UserPlus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
 
@@ -19,10 +19,12 @@ const PDV = () => {
     setLoading(true);
     setError('');
     
+    const cleanQuery = searchQuery.replace(/\D/g, '');
+    
     const { data, error: err } = await supabase
       .from('loyalty_profiles')
       .select('*')
-      .or(`cpf.eq.${searchQuery},phone.eq.${searchQuery}`)
+      .or(`cpf.eq.${cleanQuery},phone.eq.${cleanQuery}`)
       .single();
 
     if (err && err.code !== 'PGRST116') {
@@ -116,6 +118,26 @@ const PDV = () => {
     setLoading(false);
   };
 
+  const handleDelete = async () => {
+    if (!customer) return;
+    if (window.confirm(`Tem certeza que deseja apagar o cliente ${customer.full_name}? Todos os dados serão perdidos permanentemente.`)) {
+      setLoading(true);
+      const { error } = await supabase
+        .from('loyalty_profiles')
+        .delete()
+        .eq('id', customer.id);
+
+      if (!error) {
+        alert('Cliente removido com sucesso.');
+        setCustomer(null);
+        setSearchQuery('');
+      } else {
+        alert('Erro ao apagar cliente: ' + error.message);
+      }
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="page-wrapper">
       <div className="header">
@@ -203,6 +225,7 @@ const PDV = () => {
                   NOTIFICAR SMS
                 </button>
               </div>
+
             </div>
           </div>
         </div>
