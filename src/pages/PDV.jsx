@@ -41,7 +41,7 @@ const PDV = () => {
 
   const handleAddStamp = async () => {
     if (!customer) return;
-    if (customer.stamps >= 10) return;
+    if (customer.stamps >= 12) return;
 
     setLoading(true);
     const newStamps = customer.stamps + 1;
@@ -96,7 +96,7 @@ const PDV = () => {
   };
 
   const handleRedeem = async () => {
-    if (!customer || customer.stamps < 10) return;
+    if (!customer || customer.stamps < 12) return;
 
     setLoading(true);
     const { error: err } = await supabase
@@ -108,7 +108,7 @@ const PDV = () => {
       await supabase.from('stamp_transactions').insert({
         profile_id: customer.id,
         action: 'REDEEM',
-        amount: 10
+        amount: 12
       });
       setCustomer({ ...customer, stamps: 0 });
       alert('PRÊMIO RESGATADO COM SUCESSO! O cartão do cliente foi zerado.');
@@ -179,13 +179,13 @@ const PDV = () => {
           }}>
             <div className="stamp-grey-card" style={{ width: '100%', maxWidth: '500px' }}>
               <div className="stamp-grid">
-                {[...Array(10)].map((_, i) => (
+                {[...Array(12)].map((_, i) => (
                   <div key={i} className={`stamp-circle ${i < customer.stamps ? 'active' : ''}`}></div>
                 ))}
               </div>
               <div style={{ color: 'var(--salmon-text)', fontWeight: '800', fontSize: '1.1rem', textTransform: 'uppercase', textAlign: 'center', marginTop: '1.5rem' }}>
-                {customer.stamps < 10 
-                  ? `FALTA ${10 - customer.stamps} PARA GANHAR UM BOLO` 
+                {customer.stamps < 12 
+                  ? `FALTA ${12 - customer.stamps} PARA GANHAR UM BOLO` 
                   : '🔥 RESGATE SEU BOLO AGORA!'}
               </div>
             </div>
@@ -197,7 +197,7 @@ const PDV = () => {
               width: '100%', 
               maxWidth: '500px' 
             }}>
-              {customer.stamps >= 10 ? (
+              {customer.stamps >= 12 ? (
                 <button 
                   className="btn-green-pill" 
                   onClick={handleRedeem}
