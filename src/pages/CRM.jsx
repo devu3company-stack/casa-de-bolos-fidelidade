@@ -24,27 +24,35 @@ const CRM = () => {
   }, [searchTerm, segment, customers]);
 
   const fetchCustomers = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('loyalty_profiles')
-      .select('*')
-      .order('last_purchase', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('loyalty_profiles')
+        .select('*')
+        .order('last_purchase', { ascending: false });
 
-    if (data) {
-      const processed = data.map(customer => {
-        const lastPurchase = new Date(customer.last_purchase);
-        const now = new Date();
-        const diffTime = Math.abs(now - lastPurchase);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        return {
-          ...customer,
-          daysInactive: diffDays
-        };
-      });
-      setCustomers(processed);
+      if (error) {
+        console.error('Erro ao buscar clientes:', error);
+        alert('Erro ao carregar clientes do banco de dados.');
+      } else if (data) {
+        const processed = data.map(customer => {
+          const lastPurchase = new Date(customer.last_purchase);
+          const now = new Date();
+          const diffTime = Math.abs(now - lastPurchase);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          return {
+            ...customer,
+            daysInactive: diffDays
+          };
+        });
+        setCustomers(processed);
+      }
+    } catch (err) {
+      console.error('Exceção capturada:', err);
+      alert('Erro de conexão com o servidor. Verifique sua internet.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleDelete = async (id, name) => {

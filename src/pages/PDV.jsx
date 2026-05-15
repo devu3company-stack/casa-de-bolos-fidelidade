@@ -20,23 +20,30 @@ const PDV = () => {
     setError('');
     
     const cleanQuery = searchQuery.replace(/\D/g, '');
-    
-    const { data, error: err } = await supabase
-      .from('loyalty_profiles')
-      .select('*')
-      .or(`cpf.eq.${cleanQuery},phone.eq.${cleanQuery}`)
-      .single();
 
-    if (err && err.code !== 'PGRST116') {
-      setError('Erro ao buscar cliente.');
-    } else if (data) {
-      setCustomer(data);
-      setShowAddForm(false);
-    } else {
-      setCustomer(null);
-      setShowAddForm(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('loyalty_profiles')
+        .select('*')
+        .or(`cpf.eq.${cleanQuery},phone.eq.${cleanQuery}`)
+        .single();
+
+      if (err && err.code !== 'PGRST116') {
+        console.error('Erro na busca:', err);
+        setError('Erro ao buscar cliente.');
+      } else if (data) {
+        setCustomer(data);
+        setShowAddForm(false);
+      } else {
+        setCustomer(null);
+        setShowAddForm(true);
+      }
+    } catch (err) {
+      console.error('Exceção na busca:', err);
+      setError('Erro de conexão com o banco de dados.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleAddStamp = async () => {
