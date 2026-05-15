@@ -20,20 +20,35 @@ const PDV = () => {
     setError('');
     
     const cleanQuery = searchQuery.replace(/\D/g, '');
+    const isNumeric = /^\d+$/.test(cleanQuery) && cleanQuery.length > 0;
 
     try {
-      const { data, error: err } = await supabase
-        .from('loyalty_profiles')
-        .select('*')
-        .or(`cpf.eq.${cleanQuery},phone.eq.${cleanQuery}`)
-        .single();
+      let query = supabase.from('loyalty_profiles').select('*');
+      
+      if (isNumeric) {
+        // Se for numérico, busca por CPF ou Telefone (exato)
+        query = query.or(`cpf.eq.${cleanQuery},phone.eq.${cleanQuery}`);
+      } else {
+        // Se tiver letras, busca por Nome (parcial)
+        query = query.ilike('full_name', `%${searchQuery}%`);
+      }
+
+      const { data, error: err } = await (isNumeric ? query.single() : query);
 
       if (err && err.code !== 'PGRST116') {
         console.error('Erro na busca:', err);
         setError('Erro ao buscar cliente.');
       } else if (data) {
-        setCustomer(data);
-        setShowAddForm(false);
+        // Se for busca por nome e retornar múltiplos, pegamos o primeiro por agora
+        // Ou poderíamos mostrar uma lista, mas para simplificar o PDV:
+        const result = Array.isArray(data) ? data[0] : data;
+        if (result) {
+          setCustomer(result);
+          setShowAddForm(false);
+        } else {
+          setCustomer(null);
+          setShowAddForm(true);
+        }
       } else {
         setCustomer(null);
         setShowAddForm(true);
@@ -154,7 +169,7 @@ const PDV = () => {
       <div className="search-container">
         <input 
           type="text" 
-          placeholder="CPF OU TELEFONE" 
+          placeholder="NOME, CPF OU TELEFONE" 
           className="input-pill"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
