@@ -26,36 +26,31 @@ const PDV = () => {
       let query = supabase.from('loyalty_profiles').select('*');
       
       if (isNumeric) {
-        // Se for numérico, busca por CPF ou Telefone (exato)
         query = query.or(`cpf.eq.${cleanQuery},phone.eq.${cleanQuery}`);
       } else {
-        // Se tiver letras, busca por Nome (parcial)
         query = query.ilike('full_name', `%${searchQuery}%`);
       }
 
-      const { data, error: err } = await (isNumeric ? query.single() : query);
+      // Usamos limit(1) em vez de single() para evitar erro 406 se houver múltiplos resultados
+      const { data, error: err } = await query.limit(1);
 
-      if (err && err.code !== 'PGRST116') {
+      if (err) {
         console.error('Erro na busca:', err);
         setError('Erro ao buscar cliente.');
-      } else if (data) {
-        // Se for busca por nome e retornar múltiplos, pegamos o primeiro por agora
-        // Ou poderíamos mostrar uma lista, mas para simplificar o PDV:
-        const result = Array.isArray(data) ? data[0] : data;
-        if (result) {
-          setCustomer(result);
-          setShowAddForm(false);
-        } else {
-          setCustomer(null);
-          setShowAddForm(true);
-        }
+      } else if (data && data.length > 0) {
+        setCustomer(data[0]);
+        setShowAddForm(false);
       } else {
         setCustomer(null);
         setShowAddForm(true);
       }
     } catch (err) {
       console.error('Exceção na busca:', err);
-      setError('Erro de conexão com o banco de dados.');
+      if (err.message === 'Failed to fetch') {
+        setError('Erro: Conexão bloqueada. Desative o AdBlock ou mude de rede.');
+      } else {
+        setError('Erro de conexão com o banco de dados.');
+      }
     } finally {
       setLoading(false);
     }

@@ -14,6 +14,7 @@ const CRM = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [segment, setSegment] = useState(initialSegment);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -49,7 +50,11 @@ const CRM = () => {
       }
     } catch (err) {
       console.error('Exceção capturada:', err);
-      alert('Erro de conexão com o servidor. Verifique sua internet.');
+      if (err.message === 'Failed to fetch') {
+        setError('Erro de conexão: Possível bloqueio por AdBlock ou Firewall. Tente desativar extensões.');
+      } else {
+        setError('Erro de conexão com o servidor. Verifique sua internet.');
+      }
     } finally {
       setLoading(false);
     }
@@ -225,6 +230,8 @@ const CRM = () => {
       }}>
         {loading ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#555' }}>Carregando dados...</div>
+        ) : error ? (
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#b85252', fontWeight: 'bold' }}>{error}</div>
         ) : filteredCustomers.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#555' }}>Nenhum cliente encontrado nesta segmentação.</div>
         ) : (
