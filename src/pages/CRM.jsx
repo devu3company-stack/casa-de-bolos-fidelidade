@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import logo from '../assets/logo.png';
-import { Search, Download, Filter, MessageSquare, Clock, Trash2 } from 'lucide-react';
+import { Search, Download, Filter, MessageSquare, Clock, Trash2, Edit } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 const CRM = () => {
@@ -14,7 +14,13 @@ const CRM = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [segment, setSegment] = useState(initialSegment);
+  const [sortBy, setSortBy] = useState('recent');
   const [error, setError] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [editForm, setEditForm] = useState({ full_name: '', phone: '', birthday: '' });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -22,7 +28,7 @@ const CRM = () => {
 
   useEffect(() => {
     filterData();
-  }, [searchTerm, segment, customers]);
+  }, [searchTerm, segment, customers, sortBy]);
 
   const fetchCustomers = async () => {
     try {
@@ -37,13 +43,19 @@ const CRM = () => {
       } else if (data) {
         const processed = data.map(customer => {
           const lastPurchase = new Date(customer.last_purchase);
+          const createdAt = new Date(customer.created_at);
           const now = new Date();
-          const diffTime = Math.abs(now - lastPurchase);
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          const diffInactive = Math.abs(now - lastPurchase);
+          const daysInactive = Math.ceil(diffInactive / (1000 * 60 * 60 * 24));
+          
+          const diffLife = Math.abs(now - createdAt);
+          const daysLife = Math.ceil(diffLife / (1000 * 60 * 60 * 24));
           
           return {
             ...customer,
-            daysInactive: diffDays
+            daysInactive,
+            daysLife
           };
         });
         setCustomers(processed);
@@ -76,6 +88,42 @@ const CRM = () => {
       }
       setLoading(false);
     }
+  };
+  const handleOpenDetails = async (customer) => {
+    setSelectedCustomer(customer);
+    setEditForm({
+      full_name: customer.full_name,
+      phone: customer.phone || '',
+      birthday: customer.birthday || ''
+    });
+    setShowModal(true);
+    
+    // Fetch History
+    const { data, error } = await supabase
+      .from('stamp_transactions')
+      .select('*')
+      .eq('profile_id', customer.id)
+      .order('created_at', { ascending: false });
+    
+    if (!error) setHistory(data);
+  };
+
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const { error } = await supabase
+      .from('loyalty_profiles')
+      .update(editForm)
+      .eq('id', selectedCustomer.id);
+
+    if (!error) {
+      alert('Cliente atualizado com sucesso!');
+      fetchCustomers();
+      setShowModal(false);
+    } else {
+      alert('Erro ao atualizar: ' + error.message);
+    }
+    setSaving(false);
   };
 
   const filterData = () => {
@@ -111,6 +159,15 @@ const CRM = () => {
         const bday = new Date(c.birthday + 'T00:00:00');
         return bday.getMonth() === today.getMonth();
       });
+    }
+
+    // Sort filter
+    if (sortBy === 'name_asc') {
+      result.sort((a, b) => a.full_name.localeCompare(b.full_name));
+    } else if (sortBy === 'phone_asc') {
+      result.sort((a, b) => (a.phone || '').localeCompare(b.phone || ''));
+    } else {
+      result.sort((a, b) => new Date(b.last_purchase) - new Date(a.last_purchase));
     }
 
     setFilteredCustomers(result);
@@ -157,6 +214,68 @@ const CRM = () => {
         <div className="analytics-pill">CRM - FIDELIZAÇÃO & CAMPANHAS</div>
       </div>
 
+      {/* Quick Filters */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.8rem', 
+        marginBottom: '1rem', 
+        flexWrap: 'wrap',
+        justifyContent: 'center' 
+      }}>
+        <button 
+          onClick={() => setSegment('all')}
+          style={{
+            padding: '0.6rem 1.2rem',
+            borderRadius: '999px',
+            border: 'none',
+            background: segment === 'all' ? '#599242' : 'white',
+            color: segment === 'all' ? 'white' : '#555',
+            fontWeight: '600',
+            cursor: 'pointer',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+            transition: 'all 0.2s'
+          }}
+        >
+          Todos
+        </button>
+        <button 
+          onClick={() => setSegment('birthday_today')}
+          style={{
+            padding: '0.6rem 1.2rem',
+            borderRadius: '999px',
+            border: 'none',
+            background: segment === 'birthday_today' ? '#EAB308' : 'white',
+            color: segment === 'birthday_today' ? 'white' : '#555',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+            transition: 'all 0.2s',
+            border: segment === 'birthday_today' ? 'none' : '2px solid #EAB308'
+          }}
+        >
+          🎂 ANIVERSARIANTES DE HOJE
+        </button>
+        <button 
+          onClick={() => setSegment('churn')}
+          style={{
+            padding: '0.6rem 1.2rem',
+            borderRadius: '999px',
+            border: 'none',
+            background: segment === 'churn' ? '#B85252' : 'white',
+            color: segment === 'churn' ? 'white' : '#555',
+            fontWeight: '600',
+            cursor: 'pointer',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+            transition: 'all 0.2s'
+          }}
+        >
+          ⚠️ Recuperar Inativos
+        </button>
+      </div>
+
       {/* Filters & Actions */}
       <div style={{ 
         background: 'rgba(255, 255, 255, 0.9)', 
@@ -188,6 +307,23 @@ const CRM = () => {
               }}
             />
           </div>
+          <select 
+            value={sortBy} 
+            onChange={(e) => setSortBy(e.target.value)}
+            style={{
+              padding: '0.8rem 1rem',
+              borderRadius: '999px',
+              border: '1px solid #ddd',
+              background: 'white',
+              outline: 'none',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            <option value="recent">Mais Recentes</option>
+            <option value="name_asc">Nome (A-Z)</option>
+            <option value="phone_asc">Telefone (A-Z)</option>
+          </select>
           <select 
             value={segment} 
             onChange={(e) => setSegment(e.target.value)}
@@ -240,9 +376,10 @@ const CRM = () => {
               <thead>
                 <tr style={{ background: '#f8f8f8', textAlign: 'left', borderBottom: '2px solid #eee' }}>
                   <th style={{ padding: '1.2rem' }}>Cliente</th>
+                  <th style={{ padding: '1.2rem' }}>LTV (Total)</th>
+                  <th style={{ padding: '1.2rem' }}>Vida (Dias)</th>
                   <th style={{ padding: '1.2rem' }}>Status</th>
                   <th style={{ padding: '1.2rem' }}>Última Compra</th>
-                  <th style={{ padding: '1.2rem' }}>Aniversário</th>
                   <th style={{ padding: '1.2rem' }}>Carimbos</th>
                   <th style={{ padding: '1.2rem', minWidth: '180px' }}>Ações</th>
                 </tr>
@@ -251,8 +388,19 @@ const CRM = () => {
                 {filteredCustomers.map((customer) => (
                   <tr key={customer.id} style={{ borderBottom: '1px solid #eee', transition: 'background 0.2s' }}>
                     <td style={{ padding: '1.2rem' }}>
-                      <div style={{ fontWeight: 'bold' }}>{customer.full_name}</div>
+                      <div 
+                        onClick={() => handleOpenDetails(customer)}
+                        style={{ fontWeight: 'bold', color: '#599242', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {customer.full_name}
+                      </div>
                       <div style={{ fontSize: '0.8rem', color: '#777' }}>{customer.phone || 'Sem telefone'}</div>
+                    </td>
+                    <td style={{ padding: '1.2rem', fontWeight: 'bold' }}>
+                      R$ {(customer.total_spent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ padding: '1.2rem', fontSize: '0.9rem' }}>
+                      {customer.daysLife} dias
                     </td>
                     <td style={{ padding: '1.2rem' }}>
                       <div style={{ 
@@ -273,9 +421,6 @@ const CRM = () => {
                     <td style={{ padding: '1.2rem', fontSize: '0.9rem' }}>
                       {new Date(customer.last_purchase).toLocaleDateString('pt-BR')}
                     </td>
-                    <td style={{ padding: '1.2rem', fontSize: '0.9rem' }}>
-                      {customer.birthday ? new Date(customer.birthday + 'T00:00:00').toLocaleDateString('pt-BR').substring(0, 5) : '-'}
-                    </td>
                     <td style={{ padding: '1.2rem' }}>
                       <div style={{ 
                         width: '30px', 
@@ -294,6 +439,27 @@ const CRM = () => {
                     </td>
                     <td style={{ padding: '1.2rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
+                        <button 
+                          onClick={() => handleOpenDetails(customer)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem',
+                            padding: '0.5rem 0.8rem',
+                            borderRadius: '8px',
+                            background: '#e0f2fe',
+                            color: '#0369a1',
+                            border: '1px solid #bae6fd',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            fontWeight: 'bold',
+                            width: '100%'
+                          }}
+                        >
+                          <Edit size={14} />
+                          EDITAR
+                        </button>
                         <button 
                           onClick={() => {
                             const phone = customer.phone?.replace(/\D/g, '');
@@ -367,6 +533,102 @@ const CRM = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Detalhes e Edição */}
+      {showModal && selectedCustomer && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '1.5rem',
+            width: '100%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '2rem',
+            position: 'relative'
+          }}>
+            <button 
+              onClick={() => setShowModal(false)}
+              style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer' }}
+            >
+              ×
+            </button>
+            
+            <h2 style={{ marginBottom: '1.5rem', color: '#333' }}>Detalhes do Cliente</h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+              {/* Coluna Edição */}
+              <div>
+                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: '#599242' }}>Editar Cadastro</h3>
+                <form onSubmit={handleUpdateCustomer} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.3rem' }}>NOME COMPLETO</label>
+                    <input 
+                      type="text" 
+                      className="input-pill" 
+                      value={editForm.full_name}
+                      onChange={e => setEditForm({...editForm, full_name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.3rem' }}>TELEFONE</label>
+                    <input 
+                      type="text" 
+                      className="input-pill" 
+                      value={editForm.phone}
+                      onChange={e => setEditForm({...editForm, phone: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.3rem' }}>ANIVERSÁRIO</label>
+                    <input 
+                      type="date" 
+                      className="input-pill" 
+                      value={editForm.birthday}
+                      onChange={e => setEditForm({...editForm, birthday: e.target.value})}
+                    />
+                  </div>
+                  <button type="submit" className="btn-green-pill" disabled={saving}>
+                    {saving ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Coluna Histórico */}
+              <div>
+                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: '#599242' }}>Histórico de Compras</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  {history.length === 0 ? (
+                    <p style={{ fontSize: '0.9rem', color: '#777' }}>Nenhuma transação encontrada.</p>
+                  ) : (
+                    history.map(item => (
+                      <div key={item.id} style={{ padding: '0.8rem', border: '1px solid #eee', borderRadius: '10px', fontSize: '0.85rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                          <span>{item.action === 'ADD' ? '➕ Carimbo Adicionado' : '🎁 Prêmio Resgatado'}</span>
+                          <span>R$ {(item.purchase_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div style={{ color: '#888', marginTop: '0.2rem' }}>
+                          {new Date(item.created_at).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="footer-section">
         <h3 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#FFFFFF' }}>Casa de Bolos - Fidelidade</h3>
