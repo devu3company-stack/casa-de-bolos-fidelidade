@@ -11,6 +11,8 @@ const PDV = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showReceiptBtn, setShowReceiptBtn] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
 
   const searchCustomer = async (e) => {
     e?.preventDefault();
@@ -18,6 +20,8 @@ const PDV = () => {
     
     setLoading(true);
     setError('');
+    setShowReceiptBtn(false);
+    setReceiptData(null);
     
     const cleanQuery = searchQuery.replace(/\D/g, '');
     const isNumeric = /^\d+$/.test(cleanQuery) && cleanQuery.length > 0;
@@ -56,25 +60,39 @@ const PDV = () => {
     }
   };
 
+  const [purchaseValue, setPurchaseValue] = useState('');
+
   const handleAddStamp = async () => {
     if (!customer) return;
     if (customer.stamps >= 12) return;
 
     setLoading(true);
     const newStamps = customer.stamps + 1;
+    const val = parseFloat(purchaseValue) || 0;
     
+    // Atualiza perfil com carimbo e incrementa total_spent (LTV)
     const { error: err } = await supabase
       .from('loyalty_profiles')
-      .update({ stamps: newStamps, last_purchase: new Date().toISOString() })
+      .update({ 
+        stamps: newStamps, 
+        last_purchase: new Date().toISOString(),
+        total_spent: (customer.total_spent || 0) + val
+      })
       .eq('id', customer.id);
 
     if (!err) {
       await supabase.from('stamp_transactions').insert({
         profile_id: customer.id,
         action: 'ADD',
-        amount: 1
+        amount: 1,
+        purchase_value: val
       });
-      setCustomer({ ...customer, stamps: newStamps });
+      setCustomer({ 
+        ...customer, 
+        stamps: newStamps, 
+        total_spent: (customer.total_spent || 0) + val 
+      });
+      setPurchaseValue('');
     }
     setLoading(false);
   };
@@ -127,6 +145,16 @@ const PDV = () => {
         action: 'REDEEM',
         amount: 12
       });
+      
+      setReceiptData({
+        name: customer.full_name,
+        cpf: customer.cpf || '',
+        phone: customer.phone || '',
+        date: new Date().toLocaleDateString('pt-BR'),
+        time: new Date().toLocaleTimeString('pt-BR')
+      });
+      setShowReceiptBtn(true);
+
       setCustomer({ ...customer, stamps: 0 });
       alert('PRÊMIO RESGATADO COM SUCESSO! O cartão do cliente foi zerado.');
     } else {
@@ -224,14 +252,34 @@ const PDV = () => {
                   {loading ? 'PROCESSANDO...' : '🎁 RESGATAR BOLO GRÁTIS'}
                 </button>
               ) : (
-                <button 
-                  className="btn-green-pill" 
-                  onClick={handleAddStamp}
-                  disabled={loading}
-                  style={{ height: '60px', fontSize: '1.2rem' }}
-                >
-                  {loading ? 'PROCESSANDO...' : '+1 CARIMBO'}
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#666', marginLeft: '0.5rem' }}>VALOR DA VENDA (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    placeholder="0,00"
+                    value={purchaseValue}
+                    onChange={(e) => setPurchaseValue(e.target.value)}
+                    style={{
+                      height: '50px',
+                      borderRadius: '999px',
+                      border: '2px solid #ddd',
+                      padding: '0 1.5rem',
+                      fontSize: '1.2rem',
+                      fontWeight: 'bold',
+                      textAlign: 'center',
+                      outline: 'none'
+                    }}
+                  />
+                  <button 
+                    className="btn-green-pill" 
+                    onClick={handleAddStamp}
+                    disabled={loading}
+                    style={{ height: '60px', fontSize: '1.2rem' }}
+                  >
+                    {loading ? 'PROCESSANDO...' : '+1 CARIMBO'}
+                  </button>
+                </div>
               )}
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -242,6 +290,16 @@ const PDV = () => {
                   NOTIFICAR SMS
                 </button>
               </div>
+
+              {showReceiptBtn && receiptData && (
+                <button 
+                  className="btn-green-pill" 
+                  onClick={() => window.print()}
+                  style={{ background: '#333', marginTop: '0.5rem', width: '100%', padding: '1rem' }}
+                >
+                  🖨️ IMPRIMIR COMPROVANTE
+                </button>
+              )}
 
             </div>
           </div>
@@ -277,6 +335,24 @@ const PDV = () => {
       <div className="footer-section">
         <h3 style={{ fontSize: '1.4rem', fontWeight: '800' }}>Casa de Bolos - Baixa Mogiana</h3>
         <div className="footer-line"></div>
+      </div>
+
+      <div id="print-receipt">
+        {receiptData && (
+          <div style={{ padding: '10px', textAlign: 'center', width: '100%', margin: '0 auto' }}>
+            <h2 style={{ fontSize: '1.2rem', marginBottom: '10px' }}>CASA DE BOLOS</h2>
+            <p>Retirada de Premio Fidelidade</p>
+            <p>===============================</p>
+            <p style={{ textAlign: 'left', marginTop: '10px' }}><strong>Data:</strong> {receiptData.date}</p>
+            <p style={{ textAlign: 'left' }}><strong>Hora:</strong> {receiptData.time}</p>
+            <p style={{ textAlign: 'left' }}><strong>Cliente:</strong> {receiptData.name}</p>
+            {receiptData.cpf && <p style={{ textAlign: 'left' }}><strong>CPF:</strong> {receiptData.cpf}</p>}
+            {receiptData.phone && <p style={{ textAlign: 'left' }}><strong>Tel:</strong> {receiptData.phone}</p>}
+            <p style={{ marginTop: '10px' }}>===============================</p>
+            <p style={{ marginTop: '10px', fontWeight: 'bold' }}>Premio: 1 BOLO GRATIS</p>
+            <p style={{ marginTop: '20px', fontSize: '0.8rem' }}>Obrigado por ser nosso cliente!</p>
+          </div>
+        )}
       </div>
     </div>
   );

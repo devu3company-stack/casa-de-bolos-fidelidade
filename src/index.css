@@ -273,3 +273,27 @@ body {
   font-size: 1rem;
 }
 
+#print-receipt {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-receipt, #print-receipt * {
+    visibility: visible;
+  }
+  #print-receipt {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 0;
+    font-family: monospace;
+    color: #000;
+  }
+}
+
